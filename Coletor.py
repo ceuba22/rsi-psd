@@ -1,40 +1,74 @@
 # -*- coding: cp1252 -*-
+import os, time
 from socket import *
+import pcap, dpkt, re
+import threading, Queue
 from Captura import *
+from LogDeErros import *
 
-serverPort = 12000
-clientSocket = socket(AF_INET, SOCK_DGRAM)
-clientSocket.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
-serverAddress = ""
-serverName = '<broadcast>'
-message= ""
+class Coletor(threading.Thread):
 
-while 1:
-    #Recebe mensagem do usuario e envia ao destino
-    message = raw_input('Digite "descoberta" para parear com o servidor\n>>>')
-    if message.upper() == "DESCOBERTA":
-    	clientSocket.sendto(message,(serverName, serverPort)) #envia mensagem para o server
-    	returnMessage, serverAddress = clientSocket.recvfrom(2048) #Aguarda mensagem de retorno
-    	print("\nServidor: "+returnMessage)
-    	break
-    else:
-    	print "Comando invalido"
+	def __init__(self):
+		super(Coletor, self).__init__()
+		self.stoprequest = threading.Event()
+		self.capt = Captura()
+		self.nomecoletor = "aluizio"
 
-while 1:
-	print "Aguandando ordens do Monitor"
-	returnMessage, serverAddress = clientSocket.recvfrom(2048) #Aguarda mensagem de retorno
-	print("\nServidor: "+returnMessage)
-	if returnMessage.upper() == "COLETAR": 
-		print "\nColetando Pacotes..."
-		captura = Captura()
-		captura.captura()
-		clientSocket.sendto("\nColeta de pacotes terminada.",(serverName, serverPort)) #envia mensagem para o server
+	def run(self):
+		while not self.stoprequest.isSet():
+			self.capt.captura()
 
-	elif returnMessage.upper() == "CLASSIFICAR": 
-		print "\nClassificando Pacotes..."
+	def stop(self):
+		self.stoprequest.set()
+		self.capt.status("stop")
+
+	def resume(self):
+		self.stoprequest.clear()
+		self.capt.status("resume")
+
+	def teste(self):
+		self.stoprequest.clear()
+		self.capt.status("teste")
+
+	def log(self):
+		self.stoprequest.set()
+		self.capt.status("download")
+
+def main():
+	coletor = Coletor()
+	serverPort = 12000
+	clientSocket = socket(AF_INET, SOCK_DGRAM)
+	clientSocket.setsockopt(SOL_SOCKET, SO_BROADCAST, 1)
+	clientSocket.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+
+	serverAddress = ""
+	serverName = '<broadcast>'
+	message= ""
+
+	while True:
+		message = "adicionar"
+		clientSocket.sendto(message,(serverName, serverPort)) #envia mensagem para o server
+		message = coletor.nomecoletor
+		clientSocket.sendto(message,(serverName, serverPort)) #envia mensagem para o server
 		returnMessage, serverAddress = clientSocket.recvfrom(2048) #Aguarda mensagem de retorno
-	elif returnMessage.upper() == "LOG": 
-		print "\nAbrindo Log..."
-		returnMessage, serverAddress = clientSocket.recvfrom(2048) #Aguarda mensagem de retorno
+		if returnMessage.upper() == "ADICIONADO":
+			print "O coletor foi adicionado\n"
+			break
 
-clientSocket.close()
+	coletor.start()
+
+	while True:
+		print "Aguandando ordens do Monitor\n"
+		returnMessage, serverAddress = clientSocket.recvfrom(2048) #Aguarda mensagem de retorno
+		if returnMessage.upper() == "COLETAR":
+			coletor.resume()
+		if returnMessage.upper() == "COLETARTESTE":
+			coletor.teste()
+		if returnMessage.upper() == "PARAR":
+			coletor.stop()
+		if returnMessage.upper() == "LOG":
+			coletor.log()
+	clientSocket.close()
+
+if __name__ == '__main__':
+	main()
