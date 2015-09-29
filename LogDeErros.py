@@ -2,7 +2,7 @@ from datetime import datetime
 import os.path
 
 class LogDeErros():
-        nome_arq = ""
+        nome_arq = "logs_aluizio.txt"
 	def setErro(self,msg,coletor):
 		data = datetime.now()
 		self.nome_arq = "logs_"+coletor+".txt"

@@ -3,6 +3,7 @@ from socket import *
 import threading
 import Queue
 import os
+import sys
 
 class Monitor(threading.Thread):
 	def __init__(self):
@@ -41,20 +42,23 @@ class Monitor(threading.Thread):
 		self.stoprequest.set()
 
 	def coletar(self, clientAddress):
-		returnMessage = "coletar"
-		self.serverSocket.sendto(returnMessage, clientAddress)
+		message = "coletar"
+		self.serverSocket.sendto(message, clientAddress)
 
 	def coletarteste(self, clientAddress):
-		returnMessage = "coletarteste"
-		self.serverSocket.sendto(returnMessage, clientAddress)
+		message = "coletarteste"
+		self.serverSocket.sendto(message, clientAddress)
 
 	def suspender(self, clientAddress):
-		returnMessage = "parar"
-		self.serverSocket.sendto(returnMessage, clientAddress)
+		message = "parar"
+		self.serverSocket.sendto(message, clientAddress)
 
 	def log(self, clientAddress):
-		returnMessage = "log"
-		self.serverSocket.sendto(returnMessage, clientAddress)
+		message = "log"
+		self.serverSocket.sendto(message, clientAddress)
+		arquivo, serverAddress = self.serverSocket.recvfrom(2048) #Aguarda mensagem de retorno
+		print arquivo
+
 
 	def listarcoletores(self):
 		n = 1
@@ -97,6 +101,7 @@ def main():
 					monitor.listarcoletores()
 					n = input("Digite o número correspondente ao coletor desejado\n")
 					ip = monitor.retornaip(n)
+
 					monitor.coletarteste(ip)
 				else:
 					print "Opção inválida"
@@ -110,6 +115,7 @@ def main():
 					monitor.listarcoletores()
 					n = input("Digite o número correspondente ao coletor desejado\n")
 					ip = monitor.retornaip(n)
+
 					monitor.suspender(ip)
 
 			#######  Menu de Logs  #######
@@ -117,11 +123,12 @@ def main():
 				if not monitor.listadecoletores:
 					print "\nNenhum coletor na rede."
 				else:
-					print "\nBaixando log..."
-					monitor.listarcoletores()
-					n = input("Digite o número correspondente ao coletor desejado\n")
-					ip = monitor.retornaip(n)
-					monitor.log(ip)
+					print "Em breve"
+					#print "\nBaixando log..."
+					#monitor.listarcoletores()
+					#n = input("Digite o número correspondente ao coletor desejado\n")
+					#ip = monitor.retornaip(n)
+					#monitor.log(ip)
 
 			#######  SAIR  #######
 			elif opcao == "4":
@@ -130,7 +137,8 @@ def main():
 			else:
 				print "Opção inválida"
 
-	except (KeyboardInterrupt, SystemExit):
+	except:
+		print sys.exc_info()[1]
 		monitor.stop()
 		os._exit(0)
 		
