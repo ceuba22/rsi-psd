@@ -17,8 +17,14 @@ class Coletor(threading.Thread):
 
 	def run(self):
 		while True:
-			if not self.stoprequest.isSet():
-				self.capt.captura()
+			try:
+				if not self.stoprequest.isSet():
+					self.capt.captura()
+			except (KeyboardInterrupt, SystemExit):
+				coletor.stoprequest.set()
+				log.setErro(sys.exc_info()[1],nomecoletor)
+				print "Um erro ocorreu!"
+				os._exit(0)
 
 
 	def stop(self):
@@ -93,31 +99,26 @@ def main():
 				coletor.stop()
 				print coletor.isAlive()
 			if returnMessage.upper() == "LOG":
-				coletor.stop()
 	########################################## Transferência Confiável - Client ###########################################	
 				numero_do_pacote = 0
 				errorSocket.connect((serverAddress))
 				nome_do_arquivo, serverAddress = clientSocket.recvfrom(2048) # recebe nome do arquivo de log que deve enviar
 				nome_do_arquivo = open(nome_do_arquivo,'r+b') # abre o Arquivo
 				lendo_arquivo = nome_do_arquivo.read(40) # lê um pedaço do arquivo e salva numa variável
-				print "leu arquivo"
 				while lendo_arquivo: # loop enquanto ainda estiver lendo o arquivo
-					print "entrou no loop"
 					receber = '' # inicializando valor padrão
 					while (receber != 'ACK'): # loop enquanto não recebe ack
-						print "entrou no loop2"
 						enviar = lendo_arquivo+"&"+str(numero_do_pacote) # pedaço do arquivo + sequencia do pacote
 						errorSocket.sendWithError(enviar) # envia a variável com chance de erro
 						print "enviou pedaço do arquivo"
 						try:
-							print "esperando receber msg"
+							print "esperando receber ack"
 							msg = errorSocket.recvWithError(1024) # espera 5s para receber ack, se estourar entra no except
 							print msg
 							dados = msg.split('&') # separa o ack e o número de sequência
 							receber = dados[0] # carrega o ack para disparar loop
 							if (str(numero_do_pacote) == dados[1]):
 								lendo_arquivo = nome_do_arquivo.read(40) # lê próxima parte do arquivo
-								print "leu arquivo novamente"
 								numero_do_pacote += 1 # incrementa o número de sequência do pacote
 						except (socket.timeout): # tempo de resposta estourou
 							print "estourou o tempo"
@@ -131,9 +132,7 @@ def main():
 						break
 					except socket.timeout: # tempo de resposta estourou
 						print "estourou o tempo"
-
 				print "Enviou o fim"
-				coletor.stop()
 	##################################### ########################################### ######################################	
 
 		clientSocket.close()

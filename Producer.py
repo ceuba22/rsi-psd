@@ -57,9 +57,9 @@ class Produtor():
 			producer.send_messages(b'nenhum', b'%s %s %s' % (tupla[1], tupla[2], tupla[3]))
 			producer.send_messages(b'todos', b'%s %s %s' % (tupla[1], tupla[2], tupla[3]))
 
-#prod = Produtor()
+prod = Produtor()
+
 #prod.enviatupla(("dns",10,20,30))
 #prod.enviatupla(("ftp",40,50,60))
 #prod.enviatupla(("http",10,20,30))
 #prod.enviatupla(("ssh",10,20,30))
-#prod.enviatupla(("noip",10,20,30))

@@ -1,11 +1,11 @@
 # -*- coding: cp1252 -*-
 import time
 import pcap, dpkt, re
-import threading, Queue
 from os import system
 from LogDeErros import *
 import sys
 from Producer import *
+from threading import *
 
 class Captura():
 	"""Classe que ira capturar pacotes"""
@@ -13,12 +13,15 @@ class Captura():
 		self.stats = "resume"
 		self.log = LogDeErros()
 		self.nomecoletor = ""
-		self.noIPcount = 0
-		self.UDPcount = 0
-		self.TCPcount = 0
-		self.nPkts=0
+		self.contaSemIP = 0
+		self.contaUDP = 0
+		self.contaTCP = 0
+		self.contaPacote=0
+		self.fluxo={}
+		self.timer={}
+		self.time=5
 		self.producer = Produtor()
-		self.fluxos={}
+
 
 	def nomedocoletor(self,nome):
 		self.nomecoletor = nome
@@ -58,55 +61,35 @@ class Captura():
 
 	def capturateste(self):
 		try:
-			#pega assinaturas de prorocolos 
-			self.protocols = self.assinar()
-			#contadores
-			cnt = {"nenhum":0,"dns":0,"ftp":0,"http":0,"ssh":0,"bittorrent":0,"dhcp":0,"ssdp":0,"ssl":0}
-			tipo=""
-			ti = 0
 			for ts, pkt in pcap.pcap("test-capture.pcap"):
 				if self.stats == "teste":
-					tf = ts - ti
-					ti = ts
 					eth = dpkt.ethernet.Ethernet(pkt)
 					ip = eth.data
 					if isinstance(ip,dpkt.ip.IP):
+						ipsrc = ip.src
+						ipdst = ip.dst
+						protocolo = ip.p
 						transp = ip.data
 						if isinstance(transp,dpkt.tcp.TCP) or isinstance(transp,dpkt.udp.UDP):
 							if isinstance(ip.data,dpkt.tcp.TCP):
-								self.TCPcount += 1
+								self.contaTCP += 1
 							elif isinstance(ip.data,dpkt.udp.UDP):
-								self.UDPcount += 1
-								
-							ipsrc = ip.src
-							ipdst = ip.dst
-							portsrc = ip.data.dport
-							portdest = ip.data.sport
-							print "\nTrafego do pacote:"
-							print "origem:",ipsrc,portsrc
-							print "destino:",str(ipdst),portdest
-							app = transp.data.lower()
-							found = False
-							for p in self.protocols.items():
-								if p[1].search(app):
-									cnt[p[0]] += 1
-									found = True
-									tipo = p[0]
-							if (not found):
-								cnt["nenhum"] += 1
-					
+								self.contaUDP += 1
+							portsrc = transp.dport
+							portdest = transp.sport
+							key=str(ipsrc)+str(portsrc)+str(ipdst)+str(portdest)+str(protocolo)
+							if not key in self.fluxo:
+								self.fluxo[key] = [(ts,ip)]
+								self.conta_timeout_fluxo(key)
+							else:
+								self.fluxo[key].append((ts,ip))
+								self.conta_timeout_fluxo(key)		
 					else:
-						self.noIPcount += 1
-						print "NonIP Pacote"
-
-					tempo = tf
-					tamanho = len(pkt)
-					self.criatupla(tipo, tamanho, tempo)
-					time.sleep(0.5)
-
-				elif self.stats == "resume":
+						self.contaSemIP += 1
+						print "Pacote sem IP"
+				if self.stats == "resume":
 					self.captura()
-				else:
+				if self.stats == "":
 					print "Coletor suspenso"
 					system("clear")
 			self.status("stop")
@@ -118,83 +101,99 @@ class Captura():
 
 	def captura(self):
 		try:
-			#pega assinaturas de prorocolos 
-			self.protocols = self.assinar()
-			#contadores
-			cnt = {"nenhum":0,"dns":0,"ftp":0,"http":0,"ssh":0,"bittorrent":0,"dhcp":0,"ssdp":0,"ssl":0}
-			tipo=""
 			for ts, pkt in pcap.pcap():
-				if  self.stats == "resume":
-					inicio=time.time()
+				if self.stats == "resume":
 					eth = dpkt.ethernet.Ethernet(pkt)
 					ip = eth.data
-
 					if isinstance(ip,dpkt.ip.IP):
+						ipsrc = ip.src
+						ipdst = ip.dst
+						protocolo = ip.p
 						transp = ip.data
 						if isinstance(transp,dpkt.tcp.TCP) or isinstance(transp,dpkt.udp.UDP):
 							if isinstance(ip.data,dpkt.tcp.TCP):
-								self.TCPcount += 1
+								self.contaTCP += 1
 							elif isinstance(ip.data,dpkt.udp.UDP):
-								self.UDPcount += 1
-								
-							ipsrc = ip.src
-							ipdst = ip.dst
-							portsrc = ip.data.dport
-							portdest = ip.data.sport
-							print "\nTrafego do pacote:"
-							print "origem:",ipsrc,portsrc
-							print "destino:",str(ipdst),portdest
-							app = transp.data.lower()
-							found = False
-							for p in self.protocols.items():
-								if p[1].search(app):
-									cnt[p[0]] += 1
-									found = True
-									tipo = p[0]
-							if (not found):
-								cnt["nenhum"] += 1
-							chave=str(ipsrc)+str(ipdst)+str(portsrc)+str(portdest)+str(tipo)
-							if chave not in self.fluxos:
-								self.fluxos[chave]=str(pkt)+"%&*"+str(ts)
+								self.contaUDP += 1
+							portsrc = transp.dport
+							portdest = transp.sport
+							key=str(ipsrc)+str(portsrc)+str(ipdst)+str(portdest)+str(protocolo)
+							if not key in self.fluxo:
+								self.fluxo[key] = [(ts,ip)]
+								self.conta_timeout_fluxo(key)
+							else:
+								self.fluxo[key].append((ts,ip))
+								self.conta_timeout_fluxo(key)
+							print key		
 					else:
-						self.noIPcount += 1
-						print "NonIP Pacote"
-
-
-					fim=time.time()
-
-					tempo = ts
-					tamanho = len(pkt)
-
-					self.criatupla(tipo, tamanho, tempo)
+						self.contaSemIP += 1
+						print "Pacote sem IP"
 
 				if self.stats == "teste":
+
 					self.capturateste()
 
 				if self.stats == "stop":
+					for i in self.timer:
+						self.timer[i].cancel()
 					print "Coletor suspenso"
-					print self.fluxos
 					break
-			print "sai"
 		except (KeyboardInterrupt, SystemExit):
 			self.log.setErro(sys.exc_info()[1],self.nomecoletor)
 			print "Erro ao fazer captura."
-			os._exit(0)			
+			os._exit(0)
 
-	def criatupla (self, tp, tam, temp):
-		tipo = tp
-		tempo = temp
-		tempo = (tempo*0.001) 
-		tamanho = tam
-		tamanho = tam/1024.0
-		if tempo != 0 and tamanho != 0:
-			taxa = tamanho/tempo
-			tupla = (tipo,"%.6f" % tamanho,"%.6f" % tempo,"%.6f" % taxa)
+	def classifica_fluxo(self, fluxo): # recebe uma lista no formato: [(ts,pkt),(ts,pkt)]
+		self.protocols = self.assinar()
+		achou=False
+		for item in fluxo:
+			app = item[1].data.data.lower()
+			for p in self.protocols.items():
+				if p[1].search(app):
+					achou = True
+					protocolo = p[0]
+			if achou:
+				return protocolo
+			else:
+				return "nenhum"
+
+	def calcula_tempo_fluxo(self, fluxo): # recebe uma lista no formato: [(ts,pkt),(ts,pkt)]
+		tempo_inicial = fluxo[0][0]
+		tempo_final = fluxo[-1][0]
+		duracao = tempo_final - tempo_inicial
+		return duracao
+
+	def calcula_tamanho_fluxo(self, fluxo): # recebe uma lista no formato: [(ts,pkt),(ts,pkt)]
+		tamanho=0
+		for pacote in fluxo:
+			tamanho+=pacote[1].len
+			return tamanho
+
+	def conta_timeout_fluxo(self, key): # recebe uma string que é key de um fluxo em um dicionário
+		if key in self.timer:
+			self.timer[key].cancel()
+		self.timer[key] = Timer(self.time,self.finaliza_fluxo,args=[key])
+		self.timer[key].start()
+			
+
+	def finaliza_fluxo(self, key): # recebe uma string que é key de um fluxo em um dicionário
+		self.cria_tupla(self.fluxo[key])
+		del(self.fluxo[key])
+
+
+	def cria_tupla (self, fluxo):
+		protocolo =  self.classifica_fluxo(fluxo)
+		tempo = self.calcula_tempo_fluxo(fluxo)
+		tempo = tempo * 0.001
+		tamanho = self.calcula_tamanho_fluxo(fluxo)
+		tamanho = tamanho / 1024.0
+		if tempo > 0 and tamanho > 0:
+			taxa = tamanho / tempo
+			tupla = (protocolo,"%.6f" % tamanho,"%.6f" % tempo,"%.6f" % taxa)
 			print "Tupla gerada:", tupla
-			time.sleep(2)
-			#self.enviatupla(tupla)
+			self.envia_tupla(tupla)
 
-	def enviatupla(self, tupla):
+	def envia_tupla(self, tupla):
 		try:
 			self.producer.enviatupla(tupla)
 		except:
